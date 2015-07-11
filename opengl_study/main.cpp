@@ -6,11 +6,15 @@
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
+#include <opencv2/core/core.hpp>
+#include <opencv2/highgui/highgui.hpp>
 
 GLFWwindow* window = 0;
 GLuint program = 0;
 GLuint g_VAO = 0;
 GLuint g_VBO = 0;
+GLuint tex = 0;
+cv::Mat img;
 bool swap_col = false;
 
 static void render_scene()
@@ -20,11 +24,17 @@ static void render_scene()
 	glClear(GL_COLOR_BUFFER_BIT);
 	
 	glUseProgram(program);
+
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, tex);
+	glUniform1i(glGetUniformLocation(program, "tex"), 0);
+
 	glBindVertexArray(g_VAO);
 
 	glDrawArrays(GL_TRIANGLES, 0, 3);
 
 	glBindVertexArray(0);
+	glBindTexture(GL_TEXTURE_2D, 0);
 	glUseProgram(0);
 
 	glfwSwapBuffers(window);
@@ -61,7 +71,7 @@ static GLuint read_shader(const char* filename, GLenum shader_type)
 		delete[] strInfoLog;
 
 		glDeleteShader(vs_obj);
-		std::cout << msg << std::endl;
+		throw std::runtime_error(msg);
 	}
 
 	return vs_obj;
@@ -98,11 +108,12 @@ static void load_shaders()
 		delete[] strInfoLog;
 
 		glDeleteProgram(program);
-		std::cout << msg << std::endl;
+		throw std::runtime_error(msg);
 	}
 }
 
-static void load_scene() {
+static void load_scene()
+{
 	// make and bind the VAO
 	glGenVertexArrays(1, &g_VAO);
 	glBindVertexArray(g_VAO);
@@ -122,18 +133,43 @@ static void load_scene() {
 
 	// connect the xyz to the "vert" attribute of the vertex shader
 	glEnableVertexAttribArray(glGetAttribLocation(program, "vert"));
-	glVertexAttribPointer(glGetAttribLocation(program, "vert"), 3, GL_FLOAT, GL_FALSE, 0, NULL);
+	glVertexAttribPointer(glGetAttribLocation(program, "vert"), 3, GL_FLOAT, GL_FALSE, 5 * sizeof(GLfloat), NULL);
+
+	glEnableVertexAttribArray(glGetAttribLocation(program, "vertTexCoord"));
+	glVertexAttribPointer(glGetAttribLocation(program, "vertTexCoord"), 2, GL_FLOAT, GL_TRUE, 5 * sizeof(GLfloat), (const GLvoid*)(3 * sizeof(GLfloat)));
 
 	// unbind the VBO and VAO
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	glBindVertexArray(0);
 }
 
+static void load_textures()
+{
+	img = cv::imread("hazard.png", CV_LOAD_IMAGE_COLOR);
+
+	glGenTextures(1, &tex);
+	glBindTexture(GL_TEXTURE_2D, tex);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexImage2D(GL_TEXTURE_2D,
+		0,
+		GL_RGB,
+		(GLsizei)img.cols,
+		(GLsizei)img.rows,
+		0,
+		GL_RGB,
+		GL_UNSIGNED_BYTE,
+		img.data);
+	glBindTexture(GL_TEXTURE_2D, 0);
+}
+
 void on_error(int error_code, const char* msg) {
 	throw std::runtime_error(msg);
 }
 
-int main()
+void dain()
 {
 	// initialise GLFW
 	glfwSetErrorCallback(on_error);
@@ -170,6 +206,8 @@ int main()
 		throw std::runtime_error("OpenGL 3.2 API is not available.");
 
 	load_shaders();
+
+	load_textures();
 	
 	load_scene();
 	
@@ -185,3 +223,17 @@ int main()
 	glfwTerminate();
 }
 
+
+int main(int argc, char *argv[]) {
+	try {
+		dain();
+	}
+	catch (const std::exception& e){
+		std::cerr << "ERROR: " << e.what() << std::endl;
+		int bla;
+		std::cin >> bla;
+		return EXIT_FAILURE;
+	}
+	
+	return EXIT_SUCCESS;
+}
