@@ -24,11 +24,11 @@ static void render_scene()
 	glClear(GL_COLOR_BUFFER_BIT);
 	
 	glUseProgram(program);
-
+	
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, tex);
 	glUniform1i(glGetUniformLocation(program, "tex"), 0);
-
+	
 	glBindVertexArray(g_VAO);
 
 	glDrawArrays(GL_TRIANGLES, 0, 3);
@@ -124,10 +124,10 @@ static void load_scene()
 
 	// Put the three triangle verticies into the VBO
 	GLfloat vertexData[] = {
-		//  X     Y     Z
-		0.0f, 0.8f, 0.0f,
-		-0.8f, -0.8f, 0.0f,
-		0.8f, -0.8f, 0.0f,
+		//  X     Y     Z       U     V
+		0.0f, 0.8f, 0.0f, 0.5f, 1.0f,
+		-0.8f, -0.8f, 0.0f, 0.0f, 0.0f,
+		0.8f, -0.8f, 0.0f, 1.0f, 0.0f,
 	};
 	glBufferData(GL_ARRAY_BUFFER, sizeof(vertexData), vertexData, GL_STATIC_DRAW);
 
@@ -145,7 +145,8 @@ static void load_scene()
 
 static void load_textures()
 {
-	img = cv::imread("hazard.png", CV_LOAD_IMAGE_COLOR);
+	cv::Mat src_img = cv::imread("hazard.png", CV_LOAD_IMAGE_COLOR);
+	cv::flip(src_img, img, 0);
 
 	glGenTextures(1, &tex);
 	glBindTexture(GL_TEXTURE_2D, tex);
@@ -159,7 +160,7 @@ static void load_textures()
 		(GLsizei)img.cols,
 		(GLsizei)img.rows,
 		0,
-		GL_RGB,
+		GL_BGR,
 		GL_UNSIGNED_BYTE,
 		img.data);
 	glBindTexture(GL_TEXTURE_2D, 0);
