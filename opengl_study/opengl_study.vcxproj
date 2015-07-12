@@ -76,6 +76,7 @@
   </ItemGroup>
   <ItemGroup>
     <Image Include="hazard.png" />
+    <Image Include="wooden-crate.jpg" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

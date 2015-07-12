@@ -31,5 +31,8 @@
     <Image Include="hazard.png">
       <Filter>Resource Files</Filter>
     </Image>
+    <Image Include="wooden-crate.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
   </ItemGroup>
 </Project>
