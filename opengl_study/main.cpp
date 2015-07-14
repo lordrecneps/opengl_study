@@ -2,6 +2,7 @@
 #include <fstream>
 #include <sstream>
 #include <stdexcept>
+#include <vector>
 
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
@@ -11,101 +12,32 @@
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 
+#include "Shader.h"
+#include "Model.h"
+#include "Instance.h"
 
 GLFWwindow* window = 0;
-GLuint program = 0;
-GLuint g_VAO = 0;
-GLuint g_VBO = 0;
-GLuint tex = 0;
-cv::Mat img;
-bool swap_col = false;
+
+Model box;
+std::vector<Instance> instances;
 
 glm::vec3 cam_pos;
 float cam_vAngle = 0.0f, cam_hAngle = 0.0f;
 double cam_zoom = 0.0;
 float cam_fov = 50.0f;
 
-static GLuint read_shader(const char* filename, GLenum shader_type)
+static void load_box()
 {
-	std::ifstream vs(filename, std::ios::in | std::ios::binary);
+	box.shader.load_shader("vertex_shader.txt", "fragment_shader.txt");
+	box.load_textures("wooden-crate.jpg");
 
-	std::stringstream vs_buffer;
-	vs_buffer.str("");
-	vs_buffer << vs.rdbuf();
-
-	std::string vs_str = vs_buffer.str();
-	const char* vs_code = vs_str.c_str();
-	
-	GLuint vs_obj = glCreateShader(shader_type);
-	if (vs_obj == 0)
-		throw std::runtime_error("glCreateShader failed");
-
-	glShaderSource(vs_obj, 1, (const GLchar**)&vs_code, NULL);
-	glCompileShader(vs_obj);
-
-	GLint status;
-	glGetShaderiv(vs_obj, GL_COMPILE_STATUS, &status);
-	if (status == GL_FALSE) {
-		std::string msg("Compile failure in shader:\n");
-
-		GLint infoLogLength;
-		glGetShaderiv(vs_obj, GL_INFO_LOG_LENGTH, &infoLogLength);
-		char* strInfoLog = new char[infoLogLength + 1];
-		glGetShaderInfoLog(vs_obj, infoLogLength, NULL, strInfoLog);
-		msg += strInfoLog;
-		delete[] strInfoLog;
-
-		glDeleteShader(vs_obj);
-		throw std::runtime_error(msg);
-	}
-
-	return vs_obj;
-}
-
-static void load_shaders()
-{
-	GLuint vs_obj = read_shader("vertex_shader.txt", GL_VERTEX_SHADER);
-	GLuint fs_obj = read_shader("fragment_shader.txt", GL_FRAGMENT_SHADER);
-
-	program = glCreateProgram();
-	if (program == 0)
-		throw std::runtime_error("glCreateProgram failed");
-
-	glAttachShader(program, vs_obj);
-	glAttachShader(program, fs_obj);
-
-	glLinkProgram(program);
-
-	glDetachShader(program, vs_obj);
-	glDetachShader(program, fs_obj);
-
-	//throw exception if linking failed
-	GLint status;
-	glGetProgramiv(program, GL_LINK_STATUS, &status);
-	if (status == GL_FALSE) {
-		std::string msg("Program linking failure: ");
-
-		GLint infoLogLength;
-		glGetProgramiv(program, GL_INFO_LOG_LENGTH, &infoLogLength);
-		char* strInfoLog = new char[infoLogLength + 1];
-		glGetProgramInfoLog(program, infoLogLength, NULL, strInfoLog);
-		msg += strInfoLog;
-		delete[] strInfoLog;
-
-		glDeleteProgram(program);
-		throw std::runtime_error(msg);
-	}
-}
-
-static void load_scene()
-{
 	// make and bind the VAO
-	glGenVertexArrays(1, &g_VAO);
-	glBindVertexArray(g_VAO);
+	glGenVertexArrays(1, &box.VAO);
+	glBindVertexArray(box.VAO);
 
 	// make and bind the VBO
-	glGenBuffers(1, &g_VBO);
-	glBindBuffer(GL_ARRAY_BUFFER, g_VBO);
+	glGenBuffers(1, &box.VBO);
+	glBindBuffer(GL_ARRAY_BUFFER, box.VBO);
 
 	// Put the three triangle verticies into the VBO
 	GLfloat vertexData[] = {
@@ -161,38 +93,43 @@ static void load_scene()
 	glBufferData(GL_ARRAY_BUFFER, sizeof(vertexData), vertexData, GL_STATIC_DRAW);
 
 	// connect the xyz to the "vert" attribute of the vertex shader
-	glEnableVertexAttribArray(glGetAttribLocation(program, "vert"));
-	glVertexAttribPointer(glGetAttribLocation(program, "vert"), 3, GL_FLOAT, GL_FALSE, 5 * sizeof(GLfloat), NULL);
+	glEnableVertexAttribArray(glGetAttribLocation(box.shader.getProgram(), "vert"));
+	glVertexAttribPointer(glGetAttribLocation(box.shader.getProgram(), "vert"), 3, GL_FLOAT, GL_FALSE, 5 * sizeof(GLfloat), NULL);
 
-	glEnableVertexAttribArray(glGetAttribLocation(program, "vertTexCoord"));
-	glVertexAttribPointer(glGetAttribLocation(program, "vertTexCoord"), 2, GL_FLOAT, GL_TRUE, 5 * sizeof(GLfloat), (const GLvoid*)(3 * sizeof(GLfloat)));
+	glEnableVertexAttribArray(glGetAttribLocation(box.shader.getProgram(), "vertTexCoord"));
+	glVertexAttribPointer(glGetAttribLocation(box.shader.getProgram(), "vertTexCoord"), 2, GL_FLOAT, GL_TRUE, 5 * sizeof(GLfloat), (const GLvoid*)(3 * sizeof(GLfloat)));
 
 	// unbind the VBO and VAO
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	glBindVertexArray(0);
 }
 
-static void load_textures()
+static void load_scene()
 {
-	cv::Mat src_img = cv::imread("wooden-crate.jpg", CV_LOAD_IMAGE_COLOR);
-	cv::flip(src_img, img, 0);
+	Instance dot;
+	dot.m = &box;
+	dot.transform = glm::mat4();
+	instances.push_back(dot);
 
-	glGenTextures(1, &tex);
-	glBindTexture(GL_TEXTURE_2D, tex);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-	glTexImage2D(GL_TEXTURE_2D,
-		0,
-		GL_RGB,
-		(GLsizei)img.cols,
-		(GLsizei)img.rows,
-		0,
-		GL_BGR,
-		GL_UNSIGNED_BYTE,
-		img.data);
-	glBindTexture(GL_TEXTURE_2D, 0);
+	Instance i;
+	i.m = &box;
+	i.transform = glm::translate(glm::mat4(), glm::vec3(0, -4, 0)) * glm::scale(glm::mat4(), glm::vec3(1, 2, 1));
+	instances.push_back(i);
+
+	Instance hLeft;
+	hLeft.m = &box;
+	hLeft.transform = glm::translate(glm::mat4(), glm::vec3(-8, 0, 0)) * glm::scale(glm::mat4(), glm::vec3(1, 6, 1));
+	instances.push_back(hLeft);
+
+	Instance hRight;
+	hRight.m = &box;
+	hRight.transform = glm::translate(glm::mat4(), glm::vec3(-4, 0, 0)) * glm::scale(glm::mat4(), glm::vec3(1, 6, 1));
+	instances.push_back(hRight);
+
+	Instance hMid;
+	hMid.m = &box;
+	hMid.transform = glm::translate(glm::mat4(), glm::vec3(-6, 0, 0)) * glm::scale(glm::mat4(), glm::vec3(2, 1, 0.8));
+	instances.push_back(hMid);
 }
 
 static void render_scene()
@@ -201,13 +138,7 @@ static void render_scene()
 
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-	glUseProgram(program);
-
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, tex);
-	glUniform1i(glGetUniformLocation(program, "tex"), 0);
-
-	glm::mat4 camera = glm::perspective(glm::radians(cam_fov), 800 / 600.0f, 0.1f, 10.0f);
+	glm::mat4 camera = glm::perspective(glm::radians(cam_fov), 800 / 600.0f, 0.1f, 30.0f);
 	
 	glm::mat4 orientation;
 	orientation = glm::rotate(orientation, glm::radians(cam_vAngle), glm::vec3(1, 0, 0));
@@ -216,12 +147,29 @@ static void render_scene()
 
 	camera = glm::translate(camera, -cam_pos);
 
-	//glm::mat4 camera = glm::lookAt(cam_pos, glm::vec3(0, 0, 0), glm::vec3(0, 1, 0));
-	glUniformMatrix4fv(glGetUniformLocation(program, "camera"), 1, GL_FALSE, glm::value_ptr(camera));
+	float box_rot_angle = (float)glfwGetTime() * 45;
+	instances[0].transform = glm::rotate(glm::mat4(), glm::radians(box_rot_angle), glm::vec3(0, 1, 0));
 
-	float box_rot_angle = (float) glfwGetTime() * 45;
-	glm::mat4 model = glm::rotate(glm::mat4(), glm::radians(box_rot_angle), glm::vec3(0, 1, 0));
-	glUniformMatrix4fv(glGetUniformLocation(program, "model"), 1, GL_FALSE, glm::value_ptr(model));
+	for (auto itr = instances.begin(); itr != instances.end(); ++itr)
+	{
+		itr->m->shader.use();
+
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, itr->m->tex);
+		glUniform1i(glGetUniformLocation(itr->m->shader.getProgram(), "tex"), 0);
+
+		glUniformMatrix4fv(glGetUniformLocation(itr->m->shader.getProgram(), "camera"), 1, GL_FALSE, glm::value_ptr(camera));
+
+		glUniformMatrix4fv(glGetUniformLocation(itr->m->shader.getProgram(), "model"), 1, GL_FALSE, glm::value_ptr(itr->transform));
+
+		glBindVertexArray(itr->m->VAO);
+
+		glDrawArrays(GL_TRIANGLES, 0, 3 * 2 * 6);
+
+		glBindVertexArray(0);
+		glBindTexture(GL_TEXTURE_2D, 0);
+		glUseProgram(0);
+	}
 
 	glm::vec3 forward = glm::vec3(glm::inverse(orientation) * glm::vec4(0, 0, -1, 1));
 	glm::vec3 up = glm::vec3(glm::inverse(orientation) * glm::vec4(0, 1, 0, 1));
@@ -263,14 +211,6 @@ static void render_scene()
 	
 	cam_fov = fieldOfView;
 	cam_zoom = 0;
-
-	glBindVertexArray(g_VAO);
-
-	glDrawArrays(GL_TRIANGLES, 0, 3*2*6);
-
-	glBindVertexArray(0);
-	glBindTexture(GL_TEXTURE_2D, 0);
-	glUseProgram(0);
 
 	glfwSwapBuffers(window);
 }
@@ -326,9 +266,7 @@ void dain()
 	if (!GLEW_VERSION_3_2)
 		throw std::runtime_error("OpenGL 3.2 API is not available.");
 
-	load_shaders();
-
-	load_textures();
+	load_box();
 	
 	load_scene();
 	

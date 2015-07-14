@@ -78,6 +78,11 @@
     <Image Include="hazard.png" />
     <Image Include="wooden-crate.jpg" />
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Instance.h" />
+    <ClInclude Include="Model.h" />
+    <ClInclude Include="Shader.h" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
