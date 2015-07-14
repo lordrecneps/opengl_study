@@ -8,7 +8,7 @@
 class Model
 {
 public:
-	Model() : VAO(0), VBO(0), tex(0) {}
+	Model() : VAO(0), VBO(0), tex(0), shininess(0.0f), specular_color(1, 1, 1) {}
 
 	void load_textures(const char* texture_file)
 	{
@@ -23,7 +23,7 @@ public:
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 		glTexImage2D(GL_TEXTURE_2D,
 			0,
-			GL_RGB,
+			GL_SRGB,
 			(GLsizei)img.cols,
 			(GLsizei)img.rows,
 			0,
@@ -38,6 +38,9 @@ public:
 	GLuint tex;
 	cv::Mat img;
 	Shader shader;
+
+	float shininess;
+	glm::vec3 specular_color;
 
 	GLenum drawType;
 	GLint drawStart;

@@ -15,21 +15,21 @@
 #include "Shader.h"
 #include "Model.h"
 #include "Instance.h"
+#include "Camera.h"
 
 GLFWwindow* window = 0;
 
 Model box;
 std::vector<Instance> instances;
+Camera cam(50.0f, -1.5f);
+PointLight light(glm::vec3(), glm::vec3(1, 1, 1), 0.005f, 0.05f);
 
-glm::vec3 cam_pos;
-float cam_vAngle = 0.0f, cam_hAngle = 0.0f;
-double cam_zoom = 0.0;
-float cam_fov = 50.0f;
 
 static void load_box()
 {
 	box.shader.load_shader("vertex_shader.txt", "fragment_shader.txt");
 	box.load_textures("wooden-crate.jpg");
+	box.shininess = 720;
 
 	// make and bind the VAO
 	glGenVertexArrays(1, &box.VAO);
@@ -41,63 +41,67 @@ static void load_box()
 
 	// Put the three triangle verticies into the VBO
 	GLfloat vertexData[] = {
-		//  X     Y     Z       U     V
+		//  X     Y     Z       U     V          Normal
 		// bottom
-		-1.0f, -1.0f, -1.0f, 0.0f, 0.0f,
-		1.0f, -1.0f, -1.0f, 1.0f, 0.0f,
-		-1.0f, -1.0f, 1.0f, 0.0f, 1.0f,
-		1.0f, -1.0f, -1.0f, 1.0f, 0.0f,
-		1.0f, -1.0f, 1.0f, 1.0f, 1.0f,
-		-1.0f, -1.0f, 1.0f, 0.0f, 1.0f,
+		-1.0f, -1.0f, -1.0f, 0.0f, 0.0f, 0.0f, -1.0f, 0.0f,
+		1.0f, -1.0f, -1.0f, 1.0f, 0.0f, 0.0f, -1.0f, 0.0f,
+		-1.0f, -1.0f, 1.0f, 0.0f, 1.0f, 0.0f, -1.0f, 0.0f,
+		1.0f, -1.0f, -1.0f, 1.0f, 0.0f, 0.0f, -1.0f, 0.0f,
+		1.0f, -1.0f, 1.0f, 1.0f, 1.0f, 0.0f, -1.0f, 0.0f,
+		-1.0f, -1.0f, 1.0f, 0.0f, 1.0f, 0.0f, -1.0f, 0.0f,
 
 		// top
-		-1.0f, 1.0f, -1.0f, 0.0f, 0.0f,
-		-1.0f, 1.0f, 1.0f, 0.0f, 1.0f,
-		1.0f, 1.0f, -1.0f, 1.0f, 0.0f,
-		1.0f, 1.0f, -1.0f, 1.0f, 0.0f,
-		-1.0f, 1.0f, 1.0f, 0.0f, 1.0f,
-		1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
+		-1.0f, 1.0f, -1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f,
+		-1.0f, 1.0f, 1.0f, 0.0f, 1.0f, 0.0f, 1.0f, 0.0f,
+		1.0f, 1.0f, -1.0f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f,
+		1.0f, 1.0f, -1.0f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f,
+		-1.0f, 1.0f, 1.0f, 0.0f, 1.0f, 0.0f, 1.0f, 0.0f,
+		1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f, 0.0f,
 
 		// front
-		-1.0f, -1.0f, 1.0f, 1.0f, 0.0f,
-		1.0f, -1.0f, 1.0f, 0.0f, 0.0f,
-		-1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
-		1.0f, -1.0f, 1.0f, 0.0f, 0.0f,
-		1.0f, 1.0f, 1.0f, 0.0f, 1.0f,
-		-1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
+		-1.0f, -1.0f, 1.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f,
+		1.0f, -1.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f,
+		-1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f, 1.0f,
+		1.0f, -1.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f,
+		1.0f, 1.0f, 1.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f,
+		-1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f, 1.0f,
 
 		// back
-		-1.0f, -1.0f, -1.0f, 0.0f, 0.0f,
-		-1.0f, 1.0f, -1.0f, 0.0f, 1.0f,
-		1.0f, -1.0f, -1.0f, 1.0f, 0.0f,
-		1.0f, -1.0f, -1.0f, 1.0f, 0.0f,
-		-1.0f, 1.0f, -1.0f, 0.0f, 1.0f,
-		1.0f, 1.0f, -1.0f, 1.0f, 1.0f,
+		-1.0f, -1.0f, -1.0f, 0.0f, 0.0f, 0.0f, 0.0f, -1.0f,
+		-1.0f, 1.0f, -1.0f, 0.0f, 1.0f, 0.0f, 0.0f, -1.0f,
+		1.0f, -1.0f, -1.0f, 1.0f, 0.0f, 0.0f, 0.0f, -1.0f,
+		1.0f, -1.0f, -1.0f, 1.0f, 0.0f, 0.0f, 0.0f, -1.0f,
+		-1.0f, 1.0f, -1.0f, 0.0f, 1.0f, 0.0f, 0.0f, -1.0f,
+		1.0f, 1.0f, -1.0f, 1.0f, 1.0f, 0.0f, 0.0f, -1.0f,
 
 		// left
-		-1.0f, -1.0f, 1.0f, 0.0f, 1.0f,
-		-1.0f, 1.0f, -1.0f, 1.0f, 0.0f,
-		-1.0f, -1.0f, -1.0f, 0.0f, 0.0f,
-		-1.0f, -1.0f, 1.0f, 0.0f, 1.0f,
-		-1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
-		-1.0f, 1.0f, -1.0f, 1.0f, 0.0f,
+		-1.0f, -1.0f, 1.0f, 0.0f, 1.0f, -1.0f, 0.0f, 0.0f,
+		-1.0f, 1.0f, -1.0f, 1.0f, 0.0f, -1.0f, 0.0f, 0.0f,
+		-1.0f, -1.0f, -1.0f, 0.0f, 0.0f, -1.0f, 0.0f, 0.0f,
+		-1.0f, -1.0f, 1.0f, 0.0f, 1.0f, -1.0f, 0.0f, 0.0f,
+		-1.0f, 1.0f, 1.0f, 1.0f, 1.0f, -1.0f, 0.0f, 0.0f,
+		-1.0f, 1.0f, -1.0f, 1.0f, 0.0f, -1.0f, 0.0f, 0.0f,
 
 		// right
-		1.0f, -1.0f, 1.0f, 1.0f, 1.0f,
-		1.0f, -1.0f, -1.0f, 1.0f, 0.0f,
-		1.0f, 1.0f, -1.0f, 0.0f, 0.0f,
-		1.0f, -1.0f, 1.0f, 1.0f, 1.0f,
-		1.0f, 1.0f, -1.0f, 0.0f, 0.0f,
-		1.0f, 1.0f, 1.0f, 0.0f, 1.0f
+		1.0f, -1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f,
+		1.0f, -1.0f, -1.0f, 1.0f, 0.0f, 1.0f, 0.0f, 0.0f,
+		1.0f, 1.0f, -1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f,
+		1.0f, -1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 0.0f, 0.0f,
+		1.0f, 1.0f, -1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f,
+		1.0f, 1.0f, 1.0f, 0.0f, 1.0f, 1.0f, 0.0f, 0.0f
 	};
+
 	glBufferData(GL_ARRAY_BUFFER, sizeof(vertexData), vertexData, GL_STATIC_DRAW);
 
 	// connect the xyz to the "vert" attribute of the vertex shader
 	glEnableVertexAttribArray(glGetAttribLocation(box.shader.getProgram(), "vert"));
-	glVertexAttribPointer(glGetAttribLocation(box.shader.getProgram(), "vert"), 3, GL_FLOAT, GL_FALSE, 5 * sizeof(GLfloat), NULL);
+	glVertexAttribPointer(glGetAttribLocation(box.shader.getProgram(), "vert"), 3, GL_FLOAT, GL_FALSE, 8 * sizeof(GLfloat), NULL);
 
 	glEnableVertexAttribArray(glGetAttribLocation(box.shader.getProgram(), "vertTexCoord"));
-	glVertexAttribPointer(glGetAttribLocation(box.shader.getProgram(), "vertTexCoord"), 2, GL_FLOAT, GL_TRUE, 5 * sizeof(GLfloat), (const GLvoid*)(3 * sizeof(GLfloat)));
+	glVertexAttribPointer(glGetAttribLocation(box.shader.getProgram(), "vertTexCoord"), 2, GL_FLOAT, GL_TRUE, 8 * sizeof(GLfloat), (const GLvoid*)(3 * sizeof(GLfloat)));
+
+	glEnableVertexAttribArray(glGetAttribLocation(box.shader.getProgram(), "vertNormal"));
+	glVertexAttribPointer(glGetAttribLocation(box.shader.getProgram(), "vertNormal"), 3, GL_FLOAT, GL_TRUE, 8 * sizeof(GLfloat), (const GLvoid*)(5 * sizeof(GLfloat)));
 
 	// unbind the VBO and VAO
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
@@ -108,27 +112,27 @@ static void load_scene()
 {
 	Instance dot;
 	dot.m = &box;
-	dot.transform = glm::mat4();
+	dot.setTransform(glm::mat4());
 	instances.push_back(dot);
 
 	Instance i;
 	i.m = &box;
-	i.transform = glm::translate(glm::mat4(), glm::vec3(0, -4, 0)) * glm::scale(glm::mat4(), glm::vec3(1, 2, 1));
+	i.setTransform(glm::translate(glm::mat4(), glm::vec3(0, -4, 0)) * glm::scale(glm::mat4(), glm::vec3(1, 2, 1)));
 	instances.push_back(i);
 
 	Instance hLeft;
 	hLeft.m = &box;
-	hLeft.transform = glm::translate(glm::mat4(), glm::vec3(-8, 0, 0)) * glm::scale(glm::mat4(), glm::vec3(1, 6, 1));
+	hLeft.setTransform(glm::translate(glm::mat4(), glm::vec3(-8, 0, 0)) * glm::scale(glm::mat4(), glm::vec3(1, 6, 1)));
 	instances.push_back(hLeft);
 
 	Instance hRight;
 	hRight.m = &box;
-	hRight.transform = glm::translate(glm::mat4(), glm::vec3(-4, 0, 0)) * glm::scale(glm::mat4(), glm::vec3(1, 6, 1));
+	hRight.setTransform(glm::translate(glm::mat4(), glm::vec3(-4, 0, 0)) * glm::scale(glm::mat4(), glm::vec3(1, 6, 1)));
 	instances.push_back(hRight);
 
 	Instance hMid;
 	hMid.m = &box;
-	hMid.transform = glm::translate(glm::mat4(), glm::vec3(-6, 0, 0)) * glm::scale(glm::mat4(), glm::vec3(2, 1, 0.8));
+	hMid.setTransform(glm::translate(glm::mat4(), glm::vec3(-6, 0, 0)) * glm::scale(glm::mat4(), glm::vec3(2, 1, 0.8)));
 	instances.push_back(hMid);
 }
 
@@ -138,79 +142,42 @@ static void render_scene()
 
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-	glm::mat4 camera = glm::perspective(glm::radians(cam_fov), 800 / 600.0f, 0.1f, 30.0f);
-	
-	glm::mat4 orientation;
-	orientation = glm::rotate(orientation, glm::radians(cam_vAngle), glm::vec3(1, 0, 0));
-	orientation = glm::rotate(orientation, glm::radians(cam_hAngle), glm::vec3(0, 1, 0));
-	camera *= orientation;
-
-	camera = glm::translate(camera, -cam_pos);
+	glm::vec3 forward, up, right;
+	glm::mat4 camera = cam.get_matrix(&forward, &up, &right);
 
 	float box_rot_angle = (float)glfwGetTime() * 45;
-	instances[0].transform = glm::rotate(glm::mat4(), glm::radians(box_rot_angle), glm::vec3(0, 1, 0));
+	instances[0].setTransform(glm::rotate(glm::mat4(), glm::radians(box_rot_angle), glm::vec3(0, 1, 0)));
 
-	for (auto itr = instances.begin(); itr != instances.end(); ++itr)
+	light.pos = cam.pos;
+
+	for (auto itr : instances)
 	{
-		itr->m->shader.use();
-
-		glActiveTexture(GL_TEXTURE0);
-		glBindTexture(GL_TEXTURE_2D, itr->m->tex);
-		glUniform1i(glGetUniformLocation(itr->m->shader.getProgram(), "tex"), 0);
-
-		glUniformMatrix4fv(glGetUniformLocation(itr->m->shader.getProgram(), "camera"), 1, GL_FALSE, glm::value_ptr(camera));
-
-		glUniformMatrix4fv(glGetUniformLocation(itr->m->shader.getProgram(), "model"), 1, GL_FALSE, glm::value_ptr(itr->transform));
-
-		glBindVertexArray(itr->m->VAO);
-
-		glDrawArrays(GL_TRIANGLES, 0, 3 * 2 * 6);
-
-		glBindVertexArray(0);
-		glBindTexture(GL_TEXTURE_2D, 0);
-		glUseProgram(0);
+		itr.render(camera, cam.pos, light);
 	}
-
-	glm::vec3 forward = glm::vec3(glm::inverse(orientation) * glm::vec4(0, 0, -1, 1));
-	glm::vec3 up = glm::vec3(glm::inverse(orientation) * glm::vec4(0, 1, 0, 1));
-	glm::vec3 right = glm::vec3(glm::inverse(orientation) * glm::vec4(1, 0, 0, 1));
 
 	if (glfwGetKey(window, 'S')){
-		cam_pos -= 0.1f * forward;
+		cam.pos -= 0.1f * forward;
 	}
 	else if (glfwGetKey(window, 'W')){
-		cam_pos += 0.1f * forward;
+		cam.pos += 0.1f * forward;
 	}
 	if (glfwGetKey(window, 'A')){
-		cam_pos -= 0.1f * right;
+		cam.pos -= 0.1f * right;
 	}
 	else if (glfwGetKey(window, 'D')){
-		cam_pos += 0.1f * right;
+		cam.pos += 0.1f * right;
 	}
 	if (glfwGetKey(window, 'X')){
-		cam_pos -= 0.1f * up;
+		cam.pos -= 0.1f * up;
 	}
 	else if (glfwGetKey(window, 'Z')){
-		cam_pos += 0.1f * up;
+		cam.pos += 0.1f * up;
 	}
 
 	double mouseX, mouseY;
 	glfwGetCursorPos(window, &mouseX, &mouseY);
-	cam_vAngle += 0.1f * (float)mouseY;
-	cam_hAngle += 0.1f * (float)mouseX;
-
-	cam_hAngle = fmodf(cam_hAngle, 360.0f);
-	cam_vAngle = (cam_vAngle > 85.0f) ? 85.0f: cam_vAngle;
-	cam_vAngle = (cam_vAngle < -85.0f) ? -85.0f : cam_vAngle;
+	cam.update_angles(0.1f * (float)mouseY, 0.1f * (float)mouseX);
 	glfwSetCursorPos(window, 0, 0);
-
-	const float zoomSensitivity = -1.5f;
-	float fieldOfView = cam_fov + zoomSensitivity * (float)cam_zoom;
-	if (fieldOfView < 5.0f) fieldOfView = 5.0f;
-	if (fieldOfView > 130.0f) fieldOfView = 130.0f;
-	
-	cam_fov = fieldOfView;
-	cam_zoom = 0;
 
 	glfwSwapBuffers(window);
 }
@@ -220,7 +187,7 @@ void on_error(int error_code, const char* msg) {
 }
 
 void OnScroll(GLFWwindow* window, double deltaX, double deltaY) {
-	cam_zoom += deltaY;
+	cam.adjust_zoom((float) deltaY);
 }
 
 void dain()
@@ -266,15 +233,13 @@ void dain()
 	if (!GLEW_VERSION_3_2)
 		throw std::runtime_error("OpenGL 3.2 API is not available.");
 
-	load_box();
-	
+	load_box();	
 	load_scene();
 	
 	while (!glfwWindowShouldClose(window)){
 		// process pending events
 		glfwPollEvents();
 
-		// draw one frame
 		render_scene();
 
 		if (glfwGetKey(window, GLFW_KEY_ESCAPE))
